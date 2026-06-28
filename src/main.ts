@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, TextFileView } from 'obsidian';
+import { Plugin, WorkspaceLeaf, TextFileView, MarkdownRenderer } from 'obsidian';
 
 const VIEW_TYPE_QUIZ = 'quiz-view';
 
@@ -54,6 +54,24 @@ function parseSelectBlock(lines: string[]): SelectBlock | null {
 }
 
 class QuizView extends TextFileView {
+	private isSourceMode = false;
+	private sourceActionEl?: HTMLElement;
+
+	private toggleSourceMode(): void {
+		this.isSourceMode = !this.isSourceMode;
+		if (this.sourceActionEl) {
+			// Try to update the icon element inside the action
+			const iconEl = this.sourceActionEl.querySelector('.clickable-icon');
+			if (iconEl) {
+				iconEl.setAttribute(
+					'aria-label',
+					this.isSourceMode ? '切换为测验模式' : '切换源码模式',
+				);
+			}
+		}
+		this.render();
+	}
+
 	getViewType(): string {
 		return VIEW_TYPE_QUIZ;
 	}
@@ -76,19 +94,49 @@ class QuizView extends TextFileView {
 		this.contentEl.empty();
 	}
 
-	private render(): void {
+	async onOpen(): Promise<void> {
+		this.sourceActionEl = this.addAction(
+			'file-code',
+			'切换源码模式',
+			() => this.toggleSourceMode(),
+		);
+	}
+
+	private async render(): Promise<void> {
 		const container = this.contentEl;
 		container.empty();
+
+		if (this.isSourceMode) {
+			this.renderSourceMode(container);
+			return;
+		}
+
 		container.style.cssText =
 			'padding:16px;max-width:800px;margin:0 auto;';
 
 		const lines = this.data.split('\n');
 		let i = 0;
+		const mdBuffer: string[] = [];
+
+		const flushBuffer = async () => {
+			if (mdBuffer.length > 0) {
+				const mdText = mdBuffer.join('\n');
+				mdBuffer.length = 0;
+				const mdDiv = container.createDiv({ cls: 'quiz-md-content' });
+				await MarkdownRenderer.renderMarkdown(
+					mdText,
+					mdDiv,
+					this.file?.path ?? '',
+					this,
+				);
+			}
+		};
 
 		while (i < lines.length) {
 			const line = lines[i] ?? '';
 
 			if (line.trim() === '::select') {
+				await flushBuffer();
 				const blockLines: string[] = [];
 				let blockEnd = -1;
 
@@ -111,12 +159,29 @@ class QuizView extends TextFileView {
 				}
 			}
 
-			const textDiv = container.createDiv({ cls: 'quiz-plain-text' });
-			textDiv.style.cssText =
-				'white-space:pre-wrap;color:var(--text-normal);line-height:1.6;margin:2px 0;';
-			textDiv.setText(line);
+			mdBuffer.push(line);
 			i++;
 		}
+
+		await flushBuffer();
+	}
+
+	private renderSourceMode(container: HTMLElement): void {
+		container.style.cssText =
+			'padding:16px;max-width:800px;margin:0 auto;height:100%;';
+		const textarea = container.createEl('textarea');
+		textarea.style.cssText =
+			'width:100%;height:100%;min-height:500px;' +
+			'font-family:var(--font-monospace);font-size:14px;' +
+			'line-height:1.6;padding:0;' +
+			'border:none;outline:none;' +
+			'background:transparent;' +
+			'color:var(--text-normal);resize:none;box-sizing:border-box;';
+		textarea.value = this.data;
+		textarea.addEventListener('input', () => {
+			this.data = textarea.value;
+			this.requestSave();
+		});
 	}
 
 	private renderSelectBlock(
@@ -144,7 +209,7 @@ class QuizView extends TextFileView {
 
 			const textEl = qEl.createSpan({ cls: 'quiz-select-question-text' });
 			textEl.style.cssText =
-				'font-weight:600;color:var(--text-normal);line-height:26px;';
+				'font-weight:600;font-size:1.2em;color:var(--text-normal);line-height:1.6;';
 			textEl.setText(block.question);
 		}
 
@@ -241,6 +306,63 @@ export default class QuizPlugin extends Plugin {
 	async onload(): Promise<void> {
 		this.registerExtensions(['mdq'], VIEW_TYPE_QUIZ);
 		this.registerView(VIEW_TYPE_QUIZ, (leaf: WorkspaceLeaf) => new QuizView(leaf));
+
+		// inject custom markdown styles for quiz view content
+		const styleEl = document.createElement('style');
+		styleEl.setAttribute('data-quiz-styles', '');
+		styleEl.textContent = `
+.quiz-md-content { line-height: 1.6; color: var(--text-normal); }
+.quiz-md-content p { margin: 0.5em 0; }
+.quiz-md-content h1 { font-size: 1.6em; font-weight: 700; margin: 0.8em 0 0.4em; }
+.quiz-md-content h2 { font-size: 1.4em; font-weight: 700; margin: 0.7em 0 0.3em; }
+.quiz-md-content h3 { font-size: 1.2em; font-weight: 600; margin: 0.6em 0 0.3em; }
+.quiz-md-content h4 { font-size: 1.1em; font-weight: 600; margin: 0.5em 0 0.2em; }
+.quiz-md-content h5 { font-size: 1em; font-weight: 600; margin: 0.4em 0 0.2em; }
+.quiz-md-content h6 { font-size: 0.9em; font-weight: 600; color: var(--text-muted); margin: 0.3em 0 0.2em; }
+.quiz-md-content blockquote {
+	border-left: 3px solid var(--text-accent);
+	padding: 0.3em 1em;
+	margin: 0.6em 0;
+	color: var(--text-muted);
+	background: var(--background-secondary);
+	border-radius: 0 4px 4px 0;
+}
+.quiz-md-content blockquote p { margin: 0.2em 0; }
+.quiz-md-content ul, .quiz-md-content ol { padding-left: 1.5em; margin: 0.4em 0; }
+.quiz-md-content li { margin: 0.15em 0; }
+.quiz-md-content strong { font-weight: 700; color: var(--text-normal); }
+.quiz-md-content em { font-style: italic; }
+.quiz-md-content del { text-decoration: line-through; color: var(--text-muted); }
+.quiz-md-content a { color: var(--text-accent); text-decoration: none; }
+.quiz-md-content a:hover { text-decoration: underline; }
+.quiz-md-content code {
+	font-family: var(--font-monospace);
+	background: var(--background-primary-alt);
+	padding: 0.1em 0.3em;
+	border-radius: 3px;
+	font-size: 0.9em;
+}
+.quiz-md-content pre {
+	background: var(--background-primary-alt);
+	padding: 0.8em 1em;
+	border-radius: 6px;
+	overflow-x: auto;
+	margin: 0.6em 0;
+}
+.quiz-md-content pre code { background: none; padding: 0; border-radius: 0; font-size: 0.85em; }
+.quiz-md-content hr { border: none; border-top: 1px solid var(--background-modifier-border); margin: 1em 0; }
+.quiz-md-content img { max-width: 100%; }
+.quiz-md-content table { border-collapse: collapse; margin: 0.6em 0; width: 100%; }
+.quiz-md-content th, .quiz-md-content td {
+	border: 1px solid var(--background-modifier-border);
+	padding: 0.4em 0.8em;
+	text-align: left;
+}
+.quiz-md-content th { background: var(--background-secondary); font-weight: 600; }
+`;
+		document.head.appendChild(styleEl);
+
+		this.register(() => styleEl.remove());
 	}
 
 	onunload(): void {}

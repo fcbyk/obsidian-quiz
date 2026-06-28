@@ -4,19 +4,19 @@
     "type": "split",
     "children": [
       {
-        "id": "ec601697c7020c68",
+        "id": "2ad3229e2f9c3106",
         "type": "tabs",
         "children": [
           {
-            "id": "5cb058ef7c1d39e4",
+            "id": "3648e9b96a7eb506",
             "type": "leaf",
             "state": {
               "type": "quiz-view",
               "state": {
-                "file": "模板.mdq"
+                "file": "test.mdq"
               },
               "icon": "lucide-file",
-              "title": "模板"
+              "title": "test"
             }
           }
         ]
@@ -178,10 +178,13 @@
       "bases:新建数据库": false
     }
   },
-  "active": "5cb058ef7c1d39e4",
+  "active": "3648e9b96a7eb506",
   "lastOpenFiles": [
+    "test.mdq",
+    "test.md",
     "模板.mdq",
     "模板.md",
+    "hello.md",
     "Q1.md",
     "模板设计.md"
   ]
