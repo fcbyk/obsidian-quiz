@@ -10,6 +10,7 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = process.argv[2] === 'production';
+const outDir = prod ? 'dist' : 'vault/.obsidian/plugins/hello-plugin';
 
 const context = await esbuild.context({
 	banner: {
@@ -38,13 +39,14 @@ const context = await esbuild.context({
 	logLevel: 'info',
 	sourcemap: prod ? false : 'inline',
 	treeShaking: true,
-	outfile: 'vault/.obsidian/plugins/hello-plugin/main.js',
+	outfile: `${outDir}/main.js`,
 	minify: prod,
 });
 
 const copyAssets = () => {
-	fs.mkdirSync('vault/.obsidian/plugins/hello-plugin', { recursive: true });
-	fs.copyFileSync('manifest.json', 'vault/.obsidian/plugins/hello-plugin/manifest.json');
+	fs.mkdirSync(outDir, { recursive: true });
+	fs.copyFileSync('manifest.json', `${outDir}/manifest.json`);
+	fs.copyFileSync('styles.css', `${outDir}/styles.css`);
 };
 
 if (prod) {
@@ -55,4 +57,12 @@ if (prod) {
 	await context.rebuild();
 	copyAssets();
 	await context.watch();
+
+	// also watch static assets in dev mode
+	for (const asset of ['manifest.json', 'styles.css']) {
+		fs.watch(asset, () => {
+			fs.copyFileSync(asset, `${outDir}/${asset}`);
+			console.log(`[watch] ${asset} → ${outDir}/`);
+		});
+	}
 }

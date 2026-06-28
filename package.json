@@ -2,7 +2,7 @@
 	"name": "quiz",
 	"version": "0.1.0",
 	"description": "A simple Hello World plugin for Obsidian",
-	"main": "vault/.obsidian/plugins/hello-plugin/main.js",
+	"main": "dist/main.js",
 	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
