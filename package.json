@@ -1,7 +1,7 @@
 {
 	"name": "obsidian-mdq",
 	"version": "0.1.0",
-	"description": "A simple Hello World plugin for Obsidian",
+	"description": "Render interactive quizzes from Markdown (MCQ, true/false, and more).",
 	"main": "dist/main.js",
 	"type": "module",
 	"scripts": {

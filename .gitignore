@@ -3,7 +3,7 @@ node_modules/
 
 # Build output
 dist/
-vault/.obsidian/plugins/
+test/.obsidian/plugins/
 
 # macOS
 .DS_Store
