@@ -4,17 +4,19 @@
     "type": "split",
     "children": [
       {
-        "id": "6b46a640776a8d74",
+        "id": "ec601697c7020c68",
         "type": "tabs",
         "children": [
           {
-            "id": "40337f47a4daecee",
+            "id": "5cb058ef7c1d39e4",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "quiz-view",
+              "state": {
+                "file": "模板.mdq"
+              },
               "icon": "lucide-file",
-              "title": "新标签页"
+              "title": "模板"
             }
           }
         ]
@@ -74,7 +76,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 267.5
+    "width": 203.5
   },
   "right": {
     "id": "51d66647ee823661",
@@ -176,6 +178,11 @@
       "bases:新建数据库": false
     }
   },
-  "active": "40337f47a4daecee",
-  "lastOpenFiles": []
+  "active": "5cb058ef7c1d39e4",
+  "lastOpenFiles": [
+    "模板.mdq",
+    "模板.md",
+    "Q1.md",
+    "模板设计.md"
+  ]
 }
