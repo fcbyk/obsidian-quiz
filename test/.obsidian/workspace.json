@@ -4,17 +4,19 @@
     "type": "split",
     "children": [
       {
-        "id": "ad433fb481352206",
+        "id": "e79cc0ec573d859a",
         "type": "tabs",
         "children": [
           {
-            "id": "a007b8fe8c9c28a8",
+            "id": "76659401424e11dc",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "quiz-view",
+              "state": {
+                "file": "判断题.mdq"
+              },
               "icon": "lucide-file",
-              "title": "新标签页"
+              "title": "判断题"
             }
           }
         ]
@@ -176,11 +178,11 @@
       "bases:新建数据库": false
     }
   },
-  "active": "a007b8fe8c9c28a8",
+  "active": "76659401424e11dc",
   "lastOpenFiles": [
-    "判断题.mdq",
     "选择题.mdq",
     "样式.mdq",
+    "判断题.mdq",
     "md-style-test.mdq",
     "md样式.mdq",
     "test.mdq",

@@ -68,10 +68,18 @@
 
 .quiz-select-question-text {
 	font-weight: 600;
-	font-size: 1.2em;
+	font-size: 1.1em;
 	color: var(--text-normal);
 	line-height: 1.6;
 }
+
+/* 题目 heading 级别字体大小（# 数量 → 字号级别，与 Markdown 一致） */
+.quiz-q-heading-1 { font-size: 1.6em; font-weight: 700; }
+.quiz-q-heading-2 { font-size: 1.4em; font-weight: 700; }
+.quiz-q-heading-3 { font-size: 1.2em; font-weight: 600; }
+.quiz-q-heading-4 { font-size: 1.1em; font-weight: 600; }
+.quiz-q-heading-5 { font-size: 1em;   font-weight: 600; }
+.quiz-q-heading-6 { font-size: 0.9em; font-weight: 600; color: var(--text-muted); }
 
 /* ---- Select Options ---- */
 .quiz-select-option {
@@ -152,7 +160,7 @@
 
 .quiz-tf-question-text {
 	font-weight: 600;
-	font-size: 1.1em;
+	font-size: 1em;
 	color: var(--text-normal);
 	line-height: 1.6;
 	flex: 1;

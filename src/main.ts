@@ -15,6 +15,7 @@ interface SelectBlock {
 	question: string;
 	options: SelectOption[];
 	max: number; // 1 = 单选, N = 最多选 N 项, -1 = 不限 (all)
+	headingLevel: number; // 0 = 无#号默认, 1~6 = heading级别
 }
 
 interface TrueFalseItem {
@@ -22,6 +23,7 @@ interface TrueFalseItem {
 	question: string;
 	userAnswer: boolean | null; // true = 选了正确, false = 选了错误, null = 未作答
 	lineNumber: number;
+	headingLevel: number; // 0 = 无#号默认, 1~6 = heading级别
 }
 
 interface TrueFalseBlock {
@@ -31,6 +33,7 @@ interface TrueFalseBlock {
 function parseSelectBlock(lines: string[], max: number): SelectBlock | null {
 	let number = 0;
 	let question = '';
+	let headingLevel = 0;
 	const options: SelectOption[] = [];
 	let optionIndex = 0;
 
@@ -38,11 +41,20 @@ function parseSelectBlock(lines: string[], max: number): SelectBlock | null {
 		const line = lines[i] ?? '';
 		const trimmed = line.trimStart();
 
-		if (trimmed.startsWith('Q')) {
-			const match = trimmed.match(/^Q(\d+):\s*(.*)/);
-			if (match) {
-				number = parseInt(match[1] ?? '0', 10);
-				question = (match[2] ?? '').trim();
+		if (trimmed.startsWith('#') || trimmed.startsWith('Q')) {
+			// 尝试匹配带 # 号的标题格式: #### Q1: text
+			const headingMatch = trimmed.match(/^(#{1,6})\s+Q(\d+):\s*(.*)/);
+			if (headingMatch) {
+				headingLevel = (headingMatch[1] ?? '').length;
+				number = parseInt(headingMatch[2] ?? '0', 10);
+				question = (headingMatch[3] ?? '').trim();
+			} else {
+				// 兜底匹配无 # 号的普通格式: Q1: text
+				const match = trimmed.match(/^Q(\d+):\s*(.*)/);
+				if (match) {
+					number = parseInt(match[1] ?? '0', 10);
+					question = (match[2] ?? '').trim();
+				}
 			}
 		} else if (trimmed.startsWith('[')) {
 			const match = trimmed.match(/^\[([A-Z])(#?)\]\s*(.*)/);
@@ -62,7 +74,7 @@ function parseSelectBlock(lines: string[], max: number): SelectBlock | null {
 	}
 
 	if (!question && options.length === 0) return null;
-	return { number, question, options, max };
+	return { number, question, options, max, headingLevel };
 }
 
 function parseTrueFalseBlock(lines: string[]): TrueFalseBlock | null {
@@ -72,13 +84,26 @@ function parseTrueFalseBlock(lines: string[]): TrueFalseBlock | null {
 		const line = lines[i] ?? '';
 		const trimmed = line.trimStart();
 
-		// 匹配 Q1: question text [T]  或  Q1: question text
-		// userMark: [T] 或 [F] (可选)
-		const match = trimmed.match(/^Q(\d+):\s*(.*?)\s*(?:\[([TF])\])?\s*$/);
+		// 匹配带 # 号的标题格式 或 普通格式
+		// #### Q1: question text [T]  或  Q1: question text [T]
+		let match = trimmed.match(/^(#{1,6})\s+Q(\d+):\s*(.*?)\s*(?:\[([TF])\])?\s*$/);
+		let headingLevel = 0;
+
+		if (!match) {
+			match = trimmed.match(/^Q(\d+):\s*(.*?)\s*(?:\[([TF])\])?\s*$/);
+		} else {
+			headingLevel = (match[1] ?? '').length;
+		}
+
 		if (match) {
-			const number = parseInt(match[1] ?? '0', 10);
-			const question = (match[2] ?? '').trim();
-			const userMark = match[3] ?? null;
+			// 括号索引需要根据是否匹配了 # 组而偏移
+			const numIdx = headingLevel > 0 ? 2 : 1;
+			const textIdx = headingLevel > 0 ? 3 : 2;
+			const markIdx = headingLevel > 0 ? 4 : 3;
+
+			const number = parseInt(match[numIdx] ?? '0', 10);
+			const question = (match[textIdx] ?? '').trim();
+			const userMark = match[markIdx] ?? null;
 			const userAnswer = userMark === 'T' ? true : userMark === 'F' ? false : null;
 
 			items.push({
@@ -86,6 +111,7 @@ function parseTrueFalseBlock(lines: string[]): TrueFalseBlock | null {
 				question,
 				userAnswer,
 				lineNumber: i,
+				headingLevel,
 			});
 		}
 	}
@@ -275,7 +301,11 @@ class QuizView extends TextFileView {
 				numEl.setText(String(block.number));
 			}
 
-			const textEl = qEl.createSpan({ cls: 'quiz-select-question-text' });
+			const textCls = ['quiz-select-question-text'];
+			if (block.headingLevel > 0) {
+				textCls.push(`quiz-q-heading-${block.headingLevel}`);
+			}
+			const textEl = qEl.createSpan({ cls: textCls.join(' ') });
 			textEl.setText(block.question);
 		}
 
@@ -319,7 +349,11 @@ class QuizView extends TextFileView {
 				numEl.setText(String(item.number));
 			}
 
-			const textEl = qEl.createSpan({ cls: 'quiz-tf-question-text' });
+			const textCls = ['quiz-tf-question-text'];
+			if (item.headingLevel > 0) {
+				textCls.push(`quiz-q-heading-${item.headingLevel}`);
+			}
+			const textEl = qEl.createSpan({ cls: textCls.join(' ') });
 			textEl.setText(item.question);
 
 			// 按钮组
