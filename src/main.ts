@@ -14,9 +14,10 @@ interface SelectBlock {
 	number: number;
 	question: string;
 	options: SelectOption[];
+	max: number; // 1 = 单选, N = 最多选 N 项, -1 = 不限 (all)
 }
 
-function parseSelectBlock(lines: string[]): SelectBlock | null {
+function parseSelectBlock(lines: string[], max: number): SelectBlock | null {
 	let number = 0;
 	let question = '';
 	const options: SelectOption[] = [];
@@ -50,7 +51,20 @@ function parseSelectBlock(lines: string[]): SelectBlock | null {
 	}
 
 	if (!question && options.length === 0) return null;
-	return { number, question, options };
+	return { number, question, options, max };
+}
+
+function parseBlockParams(
+	paramsStr: string,
+): { max: number } {
+	const maxMatch = paramsStr.match(/max=(\w+)/);
+	if (!maxMatch) return { max: 1 };
+
+	const val = maxMatch[1] ?? '1';
+	if (val === 'all') return { max: -1 };
+
+	const num = parseInt(val, 10);
+	return { max: Number.isNaN(num) || num < 1 ? 1 : num };
 }
 
 class QuizView extends TextFileView {
@@ -133,15 +147,19 @@ class QuizView extends TextFileView {
 
 		while (i < lines.length) {
 			const line = lines[i] ?? '';
+			const trimmed = line.trim();
 
-			if (line.trim() === '::select') {
+			const selectMatch = trimmed.match(/^:::select(?:\{([^}]*)\})?$/);
+			if (selectMatch) {
 				await flushBuffer();
+				const params = parseBlockParams(selectMatch[1] ?? '');
+
 				const blockLines: string[] = [];
 				let blockEnd = -1;
 
 				for (let j = i + 1; j < lines.length; j++) {
 					const inner = lines[j] ?? '';
-					if (inner.trim() === '::') {
+					if (inner.trim() === ':::') {
 						blockEnd = j;
 						break;
 					}
@@ -149,7 +167,7 @@ class QuizView extends TextFileView {
 				}
 
 				if (blockEnd >= 0) {
-					const block = parseSelectBlock(blockLines);
+					const block = parseSelectBlock(blockLines, params.max);
 					if (block) {
 						this.renderSelectBlock(container, block, i);
 					}
@@ -222,30 +240,66 @@ class QuizView extends TextFileView {
 		clickedOption: SelectOption,
 		startLine: number,
 	): void {
-		if (clickedOption.selected) return;
-
 		const lines = this.data.split('\n');
 
-		for (const opt of block.options) {
-			if (opt.selected) {
-				const absLine = startLine + 1 + opt.lineNumber;
-				const line = lines[absLine];
-				if (line !== undefined) {
-					lines[absLine] = line.replace(
-						new RegExp(`(\\[)${opt.label}#(\\])`),
-						`$1${opt.label}$2`,
-					);
+		const toggleOption = (
+			absLine: number,
+			opt: SelectOption,
+			select: boolean,
+		) => {
+			const line = lines[absLine];
+			if (line === undefined) return;
+			if (select) {
+				lines[absLine] = line.replace(
+					new RegExp(`(\\[)${opt.label}(\\])`),
+					`$1${opt.label}#$2`,
+				);
+			} else {
+				lines[absLine] = line.replace(
+					new RegExp(`(\\[)${opt.label}#(\\])`),
+					`$1${opt.label}$2`,
+				);
+			}
+		};
+
+		if (block.max === 1) {
+			// 单选模式: 选中项不可反选，点新项先清旧项再选新项
+			if (clickedOption.selected) return;
+
+			for (const opt of block.options) {
+				if (opt.selected) {
+					toggleOption(startLine + 1 + opt.lineNumber, opt, false);
 				}
 			}
-		}
 
-		const clickedAbsLine = startLine + 1 + clickedOption.lineNumber;
-		const clickedLine = lines[clickedAbsLine];
-		if (clickedLine !== undefined) {
-			lines[clickedAbsLine] = clickedLine.replace(
-				new RegExp(`(\\[)${clickedOption.label}(\\])`),
-				`$1${clickedOption.label}#$2`,
+			toggleOption(
+				startLine + 1 + clickedOption.lineNumber,
+				clickedOption,
+				true,
 			);
+		} else {
+			// 多选模式: 可反选，有上限
+			if (clickedOption.selected) {
+				toggleOption(
+					startLine + 1 + clickedOption.lineNumber,
+					clickedOption,
+					false,
+				);
+			} else {
+				const selectedCount = block.options.filter(
+					(o) => o.selected,
+				).length;
+
+				if (block.max === -1 || selectedCount < block.max) {
+					toggleOption(
+						startLine + 1 + clickedOption.lineNumber,
+						clickedOption,
+						true,
+					);
+				} else {
+					return; // 已达上限，忽略点击
+				}
+			}
 		}
 
 		this.data = lines.join('\n');
