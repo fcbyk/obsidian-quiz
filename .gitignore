@@ -13,8 +13,8 @@ vault/.obsidian/plugins/
 .vscode/
 
 # Obsidian vault - per-user / generated
-vault/.obsidian/themes/
-vault/.obsidian/workspace.json
-vault/.obsidian/workspace-mobile.json
+test/.obsidian/themes/
+test/.obsidian/workspace.json
+test/.obsidian/workspace-mobile.json
 
 main.js

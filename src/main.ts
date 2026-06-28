@@ -30,6 +30,24 @@ interface TrueFalseBlock {
 	items: TrueFalseItem[];
 }
 
+interface FillInBlank {
+	index: number; // 该题内第几个空
+	userInput: string; // '' = 未作答
+	position: number; // 在原字符串中 { 的位置
+	lineNumber: number;
+}
+
+interface FillInItem {
+	number: number;
+	blanks: FillInBlank[];
+	headingLevel: number;
+	lineNumber: number; // 在 block 内的行号
+}
+
+interface FillInBlock {
+	items: FillInItem[];
+}
+
 function parseSelectBlock(lines: string[], max: number): SelectBlock | null {
 	let number = 0;
 	let question = '';
@@ -118,6 +136,60 @@ function parseTrueFalseBlock(lines: string[]): TrueFalseBlock | null {
 
 	if (items.length === 0) return null;
 	return { items };
+}
+
+function parseFillInBlock(lines: string[]): FillInBlock | null {
+	const items: FillInItem[] = [];
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i] ?? '';
+		const trimmed = line.trimStart();
+
+		let headingLevel = 0;
+		let number = 0;
+		let questionText = '';
+
+		// 匹配带 # 号的标题格式: #### Q1: text
+		const headingMatch = trimmed.match(/^(#{1,6})\s+Q(\d+):\s*(.*)/);
+		if (headingMatch) {
+			headingLevel = (headingMatch[1] ?? '').length;
+			number = parseInt(headingMatch[2] ?? '0', 10);
+			questionText = headingMatch[3] ?? '';
+		} else {
+			// 兜底匹配无 # 号的普通格式: Q1: text
+			const match = trimmed.match(/^Q(\d+):\s*(.*)/);
+			if (match) {
+				number = parseInt(match[1] ?? '0', 10);
+				questionText = match[2] ?? '';
+			} else {
+				continue; // 非 Q 行跳过
+			}
+		}
+
+		// 查找所有 {内容} 或 {}
+		const blankRegex = /{([^}]*)}/g;
+		const blanks: FillInBlank[] = [];
+		let m: RegExpExecArray | null;
+		let blankIdx = 0;
+		while ((m = blankRegex.exec(questionText)) !== null) {
+			blanks.push({
+				index: blankIdx++,
+				userInput: m[1] ?? '',
+				position: m.index,
+				lineNumber: i,
+			});
+		}
+
+		if (blanks.length > 0) {
+			items.push({ number, blanks, headingLevel, lineNumber: i });
+		}
+	}
+
+	return items.length > 0 ? { items } : null;
+}
+
+function escapeRegex(str: string): string {
+	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function parseBlockParams(
@@ -268,6 +340,32 @@ class QuizView extends TextFileView {
 				}
 			}
 
+			const fillMatch = trimmed.match(/^:::fill-in$/);
+			if (fillMatch) {
+				await flushBuffer();
+
+				const blockLines: string[] = [];
+				let blockEnd = -1;
+
+				for (let j = i + 1; j < lines.length; j++) {
+					const inner = lines[j] ?? '';
+					if (inner.trim() === ':::') {
+						blockEnd = j;
+						break;
+					}
+					blockLines.push(inner);
+				}
+
+				if (blockEnd >= 0) {
+					const block = parseFillInBlock(blockLines);
+					if (block) {
+						this.renderFillInBlock(container, block, i);
+					}
+					i = blockEnd + 1;
+					continue;
+				}
+			}
+
 			mdBuffer.push(line);
 			i++;
 		}
@@ -380,6 +478,110 @@ class QuizView extends TextFileView {
 			btnGroup.appendChild(falseBtn);
 			btnGroup.appendChild(trueBtn);
 		}
+	}
+
+	private renderFillInBlock(
+		container: HTMLElement,
+		block: FillInBlock,
+		startLine: number,
+	): void {
+		const blockEl = container.createDiv({ cls: 'quiz-fill-container' });
+
+		for (const item of block.items) {
+			const row = blockEl.createDiv({ cls: 'quiz-fill-item' });
+
+			// 获取该题对应的原始行文本（已去除 Q 前缀的纯题干部分）
+			const lines = this.data.split('\n');
+			const absLine = startLine + 1 + item.lineNumber;
+			const rawLine = lines[absLine] ?? '';
+
+			// 提取 Q 前缀后的部分
+			const qMatch = rawLine.trimStart().match(/^(?:#{1,6}\s+)?Q\d+:\s*(.*)$/);
+			const fullText = qMatch ? (qMatch[1] ?? '') : rawLine;
+
+			const qEl = row.createDiv({ cls: 'quiz-fill-question' });
+
+			// 题号
+			if (item.number > 0) {
+				const numEl = qEl.createSpan({ cls: 'quiz-fill-number' });
+				numEl.setText(String(item.number));
+			}
+
+			// 拆分题干：以 {[^}]*} 为分隔生成文本片段和输入框
+			const segments = fullText.split(/{[^}]*}/g);
+			for (let j = 0; j < segments.length; j++) {
+				// 文本片段
+				if (segments[j]) {
+					const textSpan = qEl.createSpan({ cls: 'quiz-fill-text' });
+					textSpan.setText(segments[j] ?? '');
+				}
+				// 插入输入框（最后一个 segment 后不插）
+				if (j < item.blanks.length) {
+					const blank = item.blanks[j]!;
+					const input = qEl.createEl('input', {
+						cls: 'quiz-fill-input',
+						type: 'text',
+					});
+					if (blank.userInput) {
+						input.value = blank.userInput;
+					}
+					input.addEventListener('blur', () => {
+						this.handleFillInput(item, blank, input.value, startLine);
+					});
+					input.addEventListener('keydown', (e) => {
+						if (e.key === 'Enter') {
+							(e.target as HTMLInputElement).blur();
+						}
+					});
+				}
+			}
+		}
+	}
+
+	private handleFillInput(
+		item: FillInItem,
+		blank: FillInBlank,
+		newValue: string,
+		startLine: number,
+	): void {
+		const lines = this.data.split('\n');
+		const absLine = startLine + 1 + item.lineNumber;
+		const line = lines[absLine];
+		if (line === undefined) return;
+
+		// 找到该行中第 blank.index 个 {}
+		const blankRegex = /{([^}]*)}/g;
+		let match: RegExpExecArray | null = null;
+		for (let i = 0; i <= blank.index; i++) {
+			match = blankRegex.exec(line);
+		}
+		if (!match) return;
+
+		const oldContent = match[1] ?? '';
+		const escapedOld = escapeRegex(oldContent);
+
+		if (oldContent === '' && newValue === '') return; // 空 → 空，无变化
+
+		if (newValue === '') {
+			// 清空：{内容} → {}
+			lines[absLine] = line.replace(
+				new RegExp(`\\{${escapedOld}\\}`),
+				'{}',
+			);
+		} else if (oldContent === '') {
+			// 首次输入：{} → {新值}
+			lines[absLine] = line.replace('{}', `{${newValue}}`);
+		} else {
+			// 修改：{旧值} → {新值}
+			lines[absLine] = line.replace(
+				new RegExp(`\\{${escapedOld}\\}`),
+				`{${newValue}}`,
+			);
+		}
+
+		blank.userInput = newValue;
+		this.data = lines.join('\n');
+		this.requestSave();
 	}
 
 	private handleTrueFalseClick(

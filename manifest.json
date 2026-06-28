@@ -1,6 +1,6 @@
 {
-  "id": "quiz",
-  "name": "Quiz",
+  "id": "obsidian-mdq",
+  "name": "MDQ Quiz",
   "version": "1.0.0",
   "minAppVersion": "1.0.0",
   "description": "Render interactive quizzes from Markdown (MCQ, true/false, and more).",
