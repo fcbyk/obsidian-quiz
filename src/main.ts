@@ -17,6 +17,17 @@ interface SelectBlock {
 	max: number; // 1 = 单选, N = 最多选 N 项, -1 = 不限 (all)
 }
 
+interface TrueFalseItem {
+	number: number;
+	question: string;
+	userAnswer: boolean | null; // true = 选了正确, false = 选了错误, null = 未作答
+	lineNumber: number;
+}
+
+interface TrueFalseBlock {
+	items: TrueFalseItem[];
+}
+
 function parseSelectBlock(lines: string[], max: number): SelectBlock | null {
 	let number = 0;
 	let question = '';
@@ -52,6 +63,35 @@ function parseSelectBlock(lines: string[], max: number): SelectBlock | null {
 
 	if (!question && options.length === 0) return null;
 	return { number, question, options, max };
+}
+
+function parseTrueFalseBlock(lines: string[]): TrueFalseBlock | null {
+	const items: TrueFalseItem[] = [];
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i] ?? '';
+		const trimmed = line.trimStart();
+
+		// 匹配 Q1: question text [T]  或  Q1: question text
+		// userMark: [T] 或 [F] (可选)
+		const match = trimmed.match(/^Q(\d+):\s*(.*?)\s*(?:\[([TF])\])?\s*$/);
+		if (match) {
+			const number = parseInt(match[1] ?? '0', 10);
+			const question = (match[2] ?? '').trim();
+			const userMark = match[3] ?? null;
+			const userAnswer = userMark === 'T' ? true : userMark === 'F' ? false : null;
+
+			items.push({
+				number,
+				question,
+				userAnswer,
+				lineNumber: i,
+			});
+		}
+	}
+
+	if (items.length === 0) return null;
+	return { items };
 }
 
 function parseBlockParams(
@@ -176,6 +216,32 @@ class QuizView extends TextFileView {
 				}
 			}
 
+			const tfMatch = trimmed.match(/^:::true-false$/);
+			if (tfMatch) {
+				await flushBuffer();
+
+				const blockLines: string[] = [];
+				let blockEnd = -1;
+
+				for (let j = i + 1; j < lines.length; j++) {
+					const inner = lines[j] ?? '';
+					if (inner.trim() === ':::') {
+						blockEnd = j;
+						break;
+					}
+					blockLines.push(inner);
+				}
+
+				if (blockEnd >= 0) {
+					const block = parseTrueFalseBlock(blockLines);
+					if (block) {
+						this.renderTrueFalseBlock(container, block, i);
+					}
+					i = blockEnd + 1;
+					continue;
+				}
+			}
+
 			mdBuffer.push(line);
 			i++;
 		}
@@ -233,6 +299,81 @@ class QuizView extends TextFileView {
 
 			optsContainer.appendChild(row);
 		}
+	}
+
+	private renderTrueFalseBlock(
+		container: HTMLElement,
+		block: TrueFalseBlock,
+		startLine: number,
+	): void {
+		const blockEl = container.createDiv({ cls: 'quiz-tf-container' });
+
+		for (const item of block.items) {
+			const row = blockEl.createDiv({ cls: 'quiz-tf-item' });
+
+			// 题号 + 题干
+			const qEl = row.createDiv({ cls: 'quiz-tf-question' });
+
+			if (item.number > 0) {
+				const numEl = qEl.createSpan({ cls: 'quiz-tf-number' });
+				numEl.setText(String(item.number));
+			}
+
+			const textEl = qEl.createSpan({ cls: 'quiz-tf-question-text' });
+			textEl.setText(item.question);
+
+			// 按钮组
+			const btnGroup = row.createDiv({ cls: 'quiz-tf-buttons' });
+
+			const falseBtn = btnGroup.createDiv({ cls: 'quiz-tf-btn' });
+			falseBtn.setText('错误');
+			if (item.userAnswer === false) {
+				falseBtn.addClass('quiz-tf-btn-selected');
+			}
+			falseBtn.addEventListener('click', () => {
+				this.handleTrueFalseClick(item, false, startLine);
+			});
+
+			const trueBtn = btnGroup.createDiv({ cls: 'quiz-tf-btn' });
+			trueBtn.setText('正确');
+			if (item.userAnswer === true) {
+				trueBtn.addClass('quiz-tf-btn-selected');
+			}
+			trueBtn.addEventListener('click', () => {
+				this.handleTrueFalseClick(item, true, startLine);
+			});
+
+			btnGroup.appendChild(falseBtn);
+			btnGroup.appendChild(trueBtn);
+		}
+	}
+
+	private handleTrueFalseClick(
+		item: TrueFalseItem,
+		wantsTrue: boolean,
+		startLine: number,
+	): void {
+		// 已选中同一项 → 无反应（单选逻辑）
+		if (item.userAnswer === wantsTrue) return;
+
+		const lines = this.data.split('\n');
+		const absLine = startLine + 1 + item.lineNumber;
+		const line = lines[absLine];
+		if (line === undefined) return;
+
+		const userMark = wantsTrue ? '[T]' : '[F]';
+
+		if (item.userAnswer === null) {
+			// 从未作答 → 追加 [T]/[F]
+			lines[absLine] = line.replace(/\s*$/, ' ' + userMark);
+		} else {
+			// 切换答案 → 替换已有标记
+			lines[absLine] = line.replace(/\[[TF]\]/, userMark);
+		}
+
+		this.data = lines.join('\n');
+		this.requestSave();
+		this.render();
 	}
 
 	private handleOptionClick(
