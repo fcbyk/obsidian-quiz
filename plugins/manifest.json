@@ -1,9 +1,0 @@
-{
-	"id": "hello-plugin",
-	"name": "Hello Plugin",
-	"version": "1.0.0",
-	"minAppVersion": "1.0.0",
-	"description": "A simple Hello World plugin.",
-	"author": "Your Name",
-	"isDesktopOnly": false
-}

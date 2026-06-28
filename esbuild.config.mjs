@@ -1,5 +1,6 @@
 import esbuild from 'esbuild';
 import process from 'process';
+import fs from 'node:fs';
 import { builtinModules } from 'node:module';
 
 const banner = `/*
@@ -37,13 +38,21 @@ const context = await esbuild.context({
 	logLevel: 'info',
 	sourcemap: prod ? false : 'inline',
 	treeShaking: true,
-	outfile: 'main.js',
+	outfile: 'vault/.obsidian/plugins/hello-plugin/main.js',
 	minify: prod,
 });
 
+const copyAssets = () => {
+	fs.mkdirSync('vault/.obsidian/plugins/hello-plugin', { recursive: true });
+	fs.copyFileSync('manifest.json', 'vault/.obsidian/plugins/hello-plugin/manifest.json');
+};
+
 if (prod) {
 	await context.rebuild();
+	copyAssets();
 	process.exit(0);
 } else {
+	await context.rebuild();
+	copyAssets();
 	await context.watch();
 }

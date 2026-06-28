@@ -2,12 +2,11 @@
 	"name": "hello-plugin",
 	"version": "1.0.0",
 	"description": "A simple Hello World plugin for Obsidian",
-	"main": "main.js",
+	"main": "vault/.obsidian/plugins/hello-plugin/main.js",
 	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"setup": "mkdir -p ../vault/.obsidian/plugins && ln -sfn ../../../plugins ../vault/.obsidian/plugins/hello-plugin"
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
 	},
 	"devDependencies": {
 		"@types/node": "^22.15.17",
